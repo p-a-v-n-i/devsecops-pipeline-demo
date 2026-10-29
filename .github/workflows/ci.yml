@@ -1,17 +1,29 @@
 
-name: Basic CI Check
+name: Secure CI Pipeline
 
 on: [push]
 
+permissions:
+  contents: read
+
 jobs:
   basic-check:
+    name: Basic CI Check
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Run a simple test
         run: |
           test 2 -eq 2
           echo "Basic test passed"
+
+      - name: Scan for exposed secrets using Gitleaks
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
