@@ -1,0 +1,17 @@
+
+name: Basic CI Check
+
+on: [push]
+
+jobs:
+  basic-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run a simple test
+        run: |
+          test 2 -eq 2
+          echo "Basic test passed"
