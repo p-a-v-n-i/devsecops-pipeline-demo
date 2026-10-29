@@ -18,10 +18,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Run a simple test
+      
+      - name: Check project README
         run: |
-          test 2 -eq 2
-          echo "Basic test passed"
+          test -s README.md
+          echo "README.md exists and is not empty"
+
 
       - name: Scan for exposed secrets using Gitleaks
         uses: gitleaks/gitleaks-action@v3
