@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      # 4. Validate required files
+      # 4. Check required files
       - name: Check project files
         run: |
           test -s README.md
@@ -39,6 +39,7 @@ jobs:
           test -s app.js
           test -s app.test.js
           test -s security-gate.js
+          test -s generate-dashboard.js
           echo "Required project files exist"
 
       # 5. Run application tests
@@ -49,7 +50,7 @@ jobs:
       - name: Prepare dependency lockfile
         run: npm install --package-lock-only --ignore-scripts
 
-      # 7. Dependency vulnerability scan
+      # 7. npm dependency scanning
       - name: Scan dependencies using npm audit
         run: npm audit --json > npm-audit-report.json || true
 
@@ -61,13 +62,14 @@ jobs:
       - name: Scan source code using Semgrep
         run: semgrep scan --config auto --json --output semgrep-report.json . || true
 
-      # 10. Secret detection
+      # 10. Gitleaks secret scanning
       - name: Scan for exposed secrets using Gitleaks
+        id: gitleaks
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 11. Security report validation
+      # 11. Validate security reports
       - name: Validate security scan reports
         run: |
           node -e "
@@ -92,18 +94,28 @@ jobs:
           console.log('Security reports validated successfully');
           "
 
-      # 12. Apply severity-based security gate
+      # 12. Severity-based security gate
       - name: Apply severity-based security gate
+        id: security_gate
         run: node security-gate.js
 
-      # 13. Upload security reports
-      - name: Upload security scan reports
+      # 13. Generate dashboard even if security gate blocks
+      - name: Generate security dashboard
+        if: always()
+        env:
+          GITLEAKS_STATUS: ${{ steps.gitleaks.outcome }}
+          SECURITY_GATE_STATUS: ${{ steps.security_gate.outcome }}
+        run: node generate-dashboard.js
+
+      # 14. Upload reports and dashboard
+      - name: Upload security reports and dashboard
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: security-scan-reports
+          name: devsecops-security-dashboard
           path: |
             npm-audit-report.json
             semgrep-report.json
             package-lock.json
+            dashboard.html
           if-no-files-found: warn
