@@ -1,7 +1,9 @@
 
 name: Secure CI Pipeline
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 permissions:
   contents: read
@@ -13,17 +15,26 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      
-      - name: Check project README
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check project files
         run: |
           test -s README.md
-          echo "README.md exists and is not empty"
+          test -s package.json
+          test -s app.js
+          test -s app.test.js
+          echo "Required project files exist"
 
+      - name: Run application tests
+        run: npm test
 
       - name: Scan for exposed secrets using Gitleaks
         uses: gitleaks/gitleaks-action@v3
