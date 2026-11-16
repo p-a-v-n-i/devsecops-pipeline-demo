@@ -1,0 +1,17 @@
+
+{
+  "name": "devsecops-demo",
+  "version": "1.0.0",
+  "description": "Sample application for DevSecOps CI/CD security pipeline",
+  "main": "app.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "devsecops",
+    "ci-cd",
+    "security-scanning"
+  ],
+  "author": "DevSecOps Team",
+  "license": "MIT"
+}
