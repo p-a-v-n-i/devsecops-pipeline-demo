@@ -12,50 +12,91 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
+      # 2. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
+      # 3. Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
+      # 4. Validate required files
       - name: Check project files
         run: |
           test -s README.md
           test -s package.json
           test -s app.js
           test -s app.test.js
+          test -s security-gate.js
           echo "Required project files exist"
 
+      # 5. Run application tests
       - name: Run application tests
         run: npm test
 
+      # 6. Prepare dependency lockfile
       - name: Prepare dependency lockfile
         run: npm install --package-lock-only --ignore-scripts
 
+      # 7. Dependency vulnerability scan
       - name: Scan dependencies using npm audit
-        run: npm audit --json > npm-audit-report.json
+        run: npm audit --json > npm-audit-report.json || true
 
+      # 8. Install Semgrep
       - name: Install Semgrep
         run: python -m pip install semgrep
 
+      # 9. Static code analysis
       - name: Scan source code using Semgrep
-        run: semgrep scan --config auto --json --output semgrep-report.json .
+        run: semgrep scan --config auto --json --output semgrep-report.json . || true
 
+      # 10. Secret detection
       - name: Scan for exposed secrets using Gitleaks
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # 11. Security report validation
+      - name: Validate security scan reports
+        run: |
+          node -e "
+          const fs = require('fs');
+          for (const file of ['npm-audit-report.json', 'semgrep-report.json']) {
+            if (!fs.existsSync(file)) {
+              console.error('Missing report:', file);
+              process.exit(1);
+            }
+            try {
+              JSON.parse(fs.readFileSync(file, 'utf8'));
+            } catch {
+              console.error('Invalid JSON report:', file);
+              process.exit(1);
+            }
+          }
+          const semgrep = JSON.parse(fs.readFileSync('semgrep-report.json', 'utf8'));
+          if (semgrep.errors?.length > 0) {
+            console.error('Semgrep scan encountered errors');
+            process.exit(1);
+          }
+          console.log('Security reports validated successfully');
+          "
+
+      # 12. Apply severity-based security gate
+      - name: Apply severity-based security gate
+        run: node security-gate.js
+
+      # 13. Upload security reports
       - name: Upload security scan reports
         if: always()
         uses: actions/upload-artifact@v4
