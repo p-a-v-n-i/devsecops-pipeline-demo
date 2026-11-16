@@ -6,41 +6,101 @@ function readReport(filename) {
     throw new Error(`Missing scan report: ${filename}`);
   }
 
-  return JSON.parse(fs.readFileSync(filename, "utf8"));
+  try {
+    return JSON.parse(fs.readFileSync(filename, "utf8"));
+  } catch {
+    throw new Error(`Invalid JSON report: ${filename}`);
+  }
 }
 
 try {
+  console.log("================================");
+  console.log("       SECURITY GATE REPORT");
+  console.log("================================");
+
+  // Read scanner reports
   const npmReport = readReport("npm-audit-report.json");
   const semgrepReport = readReport("semgrep-report.json");
 
-  if (npmReport.error) {
+  // Validate npm audit report
+  if (
+    npmReport.error ||
+    !npmReport.metadata ||
+    !npmReport.metadata.vulnerabilities
+  ) {
     throw new Error("npm audit scan could not be completed");
   }
 
-  const vulnerabilities = npmReport.metadata?.vulnerabilities || {};
+  // Validate Semgrep report
+  if (!Array.isArray(semgrepReport.results)) {
+    throw new Error("Invalid Semgrep results");
+  }
 
+  if (
+    Array.isArray(semgrepReport.errors) &&
+    semgrepReport.errors.length > 0
+  ) {
+    throw new Error("Semgrep scanner encountered errors");
+  }
+
+  // Extract npm vulnerability counts
+  const vulnerabilities = npmReport.metadata.vulnerabilities;
+
+  const npmLow = vulnerabilities.low || 0;
+  const npmModerate = vulnerabilities.moderate || 0;
   const npmHigh = vulnerabilities.high || 0;
   const npmCritical = vulnerabilities.critical || 0;
 
-  const findings = semgrepReport.results || [];
+  // Extract Semgrep findings
+  const findings = semgrepReport.results;
 
   const semgrepErrors = findings.filter(
     finding => finding.extra?.severity === "ERROR"
   );
 
-  console.log("Security Scan Summary");
-  console.log("---------------------");
-  console.log(`npm High: ${npmHigh}`);
-  console.log(`npm Critical: ${npmCritical}`);
-  console.log(`Semgrep ERROR findings: ${semgrepErrors.length}`);
+  const semgrepWarnings = findings.filter(
+    finding => finding.extra?.severity === "WARNING"
+  );
 
-  if (npmHigh > 0 || npmCritical > 0 || semgrepErrors.length > 0) {
+  const semgrepInfo = findings.filter(
+    finding => finding.extra?.severity === "INFO"
+  );
+
+  // Display security summary
+  console.log("\nDependency Scan Results");
+  console.log("-----------------------");
+  console.log(`Low: ${npmLow}`);
+  console.log(`Moderate: ${npmModerate}`);
+  console.log(`High: ${npmHigh}`);
+  console.log(`Critical: ${npmCritical}`);
+
+  console.log("\nStatic Code Analysis Results");
+  console.log("----------------------------");
+  console.log(`ERROR: ${semgrepErrors.length}`);
+  console.log(`WARNING: ${semgrepWarnings.length}`);
+  console.log(`INFO: ${semgrepInfo.length}`);
+
+  // Apply security policy
+  const shouldBlock =
+    npmHigh > 0 ||
+    npmCritical > 0 ||
+    semgrepErrors.length > 0;
+
+  console.log("\n================================");
+
+  if (shouldBlock) {
     console.error("SECURITY GATE: BLOCKED");
-    process.exit(1);
+    console.error("High-severity security findings detected.");
+    console.log("================================");
+    process.exitCode = 1;
+  } else {
+    console.log("SECURITY GATE: PASSED");
+    console.log("No blocking findings detected.");
+    console.log("================================");
   }
 
-  console.log("SECURITY GATE: PASSED");
 } catch (error) {
-  console.error("Security gate could not complete:", error.message);
-  process.exit(1);
+  console.error("\nSECURITY GATE: BLOCKED");
+  console.error("Reason:", error.message);
+  process.exitCode = 1;
 }
